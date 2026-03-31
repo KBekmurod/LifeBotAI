@@ -1,9 +1,11 @@
 'use strict';
 
 const mongoose = require('mongoose');
-const User = require('../src/models/User');
-const Memory = require('../src/models/Memory');
+const User         = require('../src/models/User');
+const Memory       = require('../src/models/Memory');
 const LegacyConfig = require('../src/models/LegacyConfig');
+const Subscription = require('../src/models/Subscription');
+const AiChat       = require('../src/models/AiChat');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -209,5 +211,123 @@ describe('LegacyConfig model', () => {
     assertInvalid(LegacyConfig, {
       userId: fakeUserId,
       deathSignal: { status: 'zombie' },
+    }));
+});
+
+// ─── Subscription ─────────────────────────────────────────────────────────────
+
+describe('Subscription model', () => {
+  const fakeUserId = new mongoose.Types.ObjectId();
+
+  it('is valid with required fields', () =>
+    assertValid(Subscription, { userId: fakeUserId, plan: 'free', status: 'active' }));
+
+  it('is invalid without userId', () =>
+    assertInvalid(Subscription, { plan: 'memory', status: 'active' }));
+
+  it('applies default values correctly', () => {
+    const sub = new Subscription({ userId: fakeUserId });
+    expect(sub.plan).toBe('free');
+    expect(sub.status).toBe('active');
+    expect(sub.cancelAtPeriodEnd).toBe(false);
+    expect(sub.stripeCustomerId).toBeNull();
+    expect(sub.stripeSubscriptionId).toBeNull();
+    expect(sub.currentPeriodStart).toBeNull();
+    expect(sub.currentPeriodEnd).toBeNull();
+    expect(sub.canceledAt).toBeNull();
+  });
+
+  it('accepts all valid plans', async () => {
+    for (const plan of ['free', 'memory', 'legacy', 'eternal']) {
+      await assertValid(Subscription, { userId: fakeUserId, plan, status: 'active' });
+    }
+  });
+
+  it('rejects an unknown plan', () =>
+    assertInvalid(Subscription, { userId: fakeUserId, plan: 'premium', status: 'active' }));
+
+  it('accepts all valid statuses', async () => {
+    for (const status of ['active', 'inactive', 'canceled', 'past_due', 'trialing']) {
+      await assertValid(Subscription, { userId: fakeUserId, plan: 'free', status });
+    }
+  });
+
+  it('rejects an unknown status', () =>
+    assertInvalid(Subscription, { userId: fakeUserId, plan: 'free', status: 'expired' }));
+
+  it('stores stripe fields', () => {
+    const sub = new Subscription({
+      userId: fakeUserId,
+      plan: 'legacy',
+      status: 'active',
+      stripeCustomerId: 'cus_test123',
+      stripeSubscriptionId: 'sub_test456',
+    });
+    expect(sub.stripeCustomerId).toBe('cus_test123');
+    expect(sub.stripeSubscriptionId).toBe('sub_test456');
+  });
+});
+
+// ─── AiChat ───────────────────────────────────────────────────────────────────
+
+describe('AiChat model', () => {
+  const fakeUserId = new mongoose.Types.ObjectId();
+
+  it('is valid with only userId', () =>
+    assertValid(AiChat, { userId: fakeUserId }));
+
+  it('is invalid without userId', () =>
+    assertInvalid(AiChat, {}));
+
+  it('applies default values correctly', () => {
+    const chat = new AiChat({ userId: fakeUserId });
+    expect(chat.isLegacyMode).toBe(false);
+    expect(chat.heirTelegramId).toBeNull();
+    expect(chat.messages).toHaveLength(0);
+    expect(chat.totalTokens).toBe(0);
+    expect(chat.status).toBe('open');
+    expect(chat.closedAt).toBeNull();
+  });
+
+  it('is valid in legacy mode with heirTelegramId', () =>
+    assertValid(AiChat, {
+      userId: fakeUserId,
+      isLegacyMode: true,
+      heirTelegramId: 'heir_999',
+    }));
+
+  it('stores messages with correct roles', () => {
+    const chat = new AiChat({
+      userId: fakeUserId,
+      messages: [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there!' },
+      ],
+    });
+    expect(chat.messages).toHaveLength(2);
+    expect(chat.messages[0].role).toBe('user');
+    expect(chat.messages[1].role).toBe('assistant');
+  });
+
+  it('is invalid when a message has an unknown role', () =>
+    assertInvalid(AiChat, {
+      userId: fakeUserId,
+      messages: [{ role: 'system', content: 'Init' }],
+    }));
+
+  it('is invalid when a message is missing content', () =>
+    assertInvalid(AiChat, {
+      userId: fakeUserId,
+      messages: [{ role: 'user' }],
+    }));
+
+  it('rejects an unknown chat status', () =>
+    assertInvalid(AiChat, { userId: fakeUserId, status: 'archived' }));
+
+  it('accepts closed status with closedAt date', () =>
+    assertValid(AiChat, {
+      userId: fakeUserId,
+      status: 'closed',
+      closedAt: new Date(),
     }));
 });
