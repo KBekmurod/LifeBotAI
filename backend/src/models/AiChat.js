@@ -80,6 +80,9 @@ const aiChatSchema = new mongoose.Schema(
 
 // Compound index: retrieve a user's chats ordered by most recent
 aiChatSchema.index({ userId: 1, createdAt: -1 });
+// Compound index aligned with spec (deceased_user_id + heir_telegram_id):
+// efficiently query legacy chats for a specific heir
+aiChatSchema.index({ userId: 1, heirTelegramId: 1 });
 // Index for legacy mode queries per user
 aiChatSchema.index({ userId: 1, isLegacyMode: 1 });
 

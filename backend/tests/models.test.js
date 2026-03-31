@@ -331,3 +331,47 @@ describe('AiChat model', () => {
       closedAt: new Date(),
     }));
 });
+
+// ─── Index verification ────────────────────────────────────────────────────────
+
+/**
+ * Returns true when `schema.indexes()` contains an index whose key fields
+ * match ALL entries in `fields` (order-insensitive).
+ */
+const hasIndex = (Model, fields) => {
+  const fieldKeys = Object.keys(fields).sort().join(',');
+  return Model.schema.indexes().some(([keyDef]) => {
+    const keys = Object.keys(keyDef).sort().join(',');
+    return keys === fieldKeys;
+  });
+};
+
+describe('Schema indexes', () => {
+  it('User has a unique index on telegramId', () => {
+    const idx = User.schema.indexes().find(([k]) => 'telegramId' in k);
+    expect(idx).toBeDefined();
+    expect(idx[1]).toMatchObject({ unique: true });
+  });
+
+  it('Memory has compound index userId+createdAt', () => {
+    expect(hasIndex(Memory, { userId: 1, createdAt: -1 })).toBe(true);
+  });
+
+  it('Memory has compound index userId+memorizedAt', () => {
+    expect(hasIndex(Memory, { userId: 1, memorizedAt: -1 })).toBe(true);
+  });
+
+  it('LegacyConfig has a unique index on userId', () => {
+    const idx = LegacyConfig.schema.indexes().find(([k]) => 'userId' in k);
+    expect(idx).toBeDefined();
+    expect(idx[1]).toMatchObject({ unique: true });
+  });
+
+  it('Subscription has compound index userId+status', () => {
+    expect(hasIndex(Subscription, { userId: 1, status: 1 })).toBe(true);
+  });
+
+  it('AiChat has compound index userId+heirTelegramId', () => {
+    expect(hasIndex(AiChat, { userId: 1, heirTelegramId: 1 })).toBe(true);
+  });
+});

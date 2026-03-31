@@ -34,15 +34,38 @@ backend/
 │   ├── config/
 │   │   ├── database.js    # MongoDB connection
 │   │   └── env.js         # Environment variable loader
-│   ├── models/            # Mongoose models (future)
+│   ├── models/
+│   │   ├── index.js       # Unified model exports
+│   │   ├── User.js        # User schema (telegramId unique index)
+│   │   ├── Memory.js      # Memory schema (userId+createdAt, userId+memorizedAt indexes)
+│   │   ├── LegacyConfig.js# Legacy config schema (userId unique index)
+│   │   ├── Subscription.js# Subscription schema (userId+status, userId+createdAt indexes)
+│   │   └── AiChat.js      # AI chat schema (userId+heirTelegramId, userId+createdAt indexes)
 │   └── utils/
 │       └── logger.js      # Simple console logger
 ├── tests/
-│   └── setup.test.js      # Health route test
+│   ├── setup.test.js      # Health route test
+│   └── models.test.js     # Mongoose schema / validation tests
 ├── .env.example
 ├── .gitignore
 └── package.json
 ```
+
+## Mongoose Models (Step 1.2)
+
+All models are exported from `src/models/index.js`:
+
+```js
+const { User, Memory, LegacyConfig, Subscription, AiChat } = require('./src/models');
+```
+
+| Model          | Key indexes                                          |
+|----------------|------------------------------------------------------|
+| `User`         | `telegramId` (unique)                                |
+| `Memory`       | `userId+createdAt`, `userId+memorizedAt`, `userId+tags`, `userId+type` |
+| `LegacyConfig` | `userId` (unique)                                    |
+| `Subscription` | `userId+status`, `userId+createdAt`, `stripeSubscriptionId` |
+| `AiChat`       | `userId+heirTelegramId`, `userId+createdAt`          |
 
 ## Scripts
 
