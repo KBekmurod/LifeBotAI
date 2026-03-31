@@ -34,11 +34,18 @@ backend/
 │   ├── config/
 │   │   ├── database.js    # MongoDB connection
 │   │   └── env.js         # Environment variable loader
-│   ├── models/            # Mongoose models (future)
+│   ├── models/
+│   │   ├── index.js       # Unified model exports
+│   │   ├── User.js        # Telegram user & subscription plan
+│   │   ├── Memory.js      # Voice/text/photo/video/document memories
+│   │   ├── LegacyConfig.js# Heirs, future letters, death signal, AI personality
+│   │   ├── Subscription.js# Stripe subscription history
+│   │   └── AiChat.js      # AI chat sessions & message history
 │   └── utils/
 │       └── logger.js      # Simple console logger
 ├── tests/
-│   └── setup.test.js      # Health route test
+│   ├── setup.test.js      # Health route test
+│   └── models.test.js     # Schema validation tests (45 tests)
 ├── .env.example
 ├── .gitignore
 └── package.json
