@@ -102,7 +102,9 @@ const memorySchema = new mongoose.Schema(
   }
 );
 
-// Compound index for common list queries: user's memories ordered by date
+// Compound index aligned with spec: user's memories ordered by creation date
+memorySchema.index({ userId: 1, createdAt: -1 });
+// Compound index for queries by event date
 memorySchema.index({ userId: 1, memorizedAt: -1 });
 // Index for tag-based filtering per user
 memorySchema.index({ userId: 1, tags: 1 });

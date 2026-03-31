@@ -58,6 +58,8 @@ const subscriptionSchema = new mongoose.Schema(
   }
 );
 
+// Compound index aligned with spec: filter a user's subscriptions by status
+subscriptionSchema.index({ userId: 1, status: 1 });
 // Compound index: list a user's subscription history ordered by creation date
 subscriptionSchema.index({ userId: 1, createdAt: -1 });
 
