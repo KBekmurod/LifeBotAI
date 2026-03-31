@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest --forceExit"
+    "test": "jest --forceExit",
+    "sanity-check": "node sanity-check.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
