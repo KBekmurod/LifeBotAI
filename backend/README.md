@@ -25,7 +25,9 @@ GET /health  →  200 OK  { "ok": true }
 | `MONGODB_URI`   | MongoDB connection string          | `mongodb://localhost:27017/lifebotai`|
 | `NODE_ENV`      | Runtime environment                | `development`                        |
 | `JWT_SECRET`    | Secret key for signing JWT tokens  | `changeme_jwt_secret_for_dev`        |
-| `JWT_EXPIRES_IN`| JWT token lifetime                 | `7d`                                 |
+| `TELEGRAM_BOT_TOKEN`| Telegram bot token from @BotFather     | *(unset)*                            |
+| `WEBHOOK_URL`       | Public HTTPS URL for Telegram webhook  | *(unset)*                            |
+| `OPENAI_API_KEY`    | OpenAI API key (leave blank for mock AI)| *(unset)*                           |
 
 ## Project Structure
 
@@ -46,14 +48,22 @@ backend/
 │   │   ├── Subscription.js# Subscription schema (userId+status, userId+createdAt indexes)
 │   │   └── AiChat.js      # AI chat schema (userId+heirTelegramId, userId+createdAt indexes)
 │   ├── routes/
-│   │   └── auth.js        # POST /auth/telegram, GET /auth/me
+│   │   ├── auth.js        # POST /auth/telegram, GET /auth/me
+│   │   ├── chat.js        # Chat session CRUD + AI messaging
+│   │   └── bot.js         # POST /bot/webhook (Telegram updates)
+│   ├── services/
+│   │   └── aiService.js   # AI response generation (mock + OpenAI)
+│   ├── bot/
+│   │   └── index.js       # Telegraf bot setup, command handlers
 │   └── utils/
 │       ├── jwt.js         # JWT sign / verify helpers
 │       └── logger.js      # Simple console logger
 ├── tests/
 │   ├── setup.test.js      # Health route test
 │   ├── models.test.js     # Mongoose schema / validation tests
-│   └── auth.test.js       # JWT utilities, auth routes, middleware tests
+│   ├── auth.test.js       # JWT utilities, auth routes, middleware tests
+│   ├── chat.test.js       # Chat session routes + AI messaging tests
+│   └── bot.test.js        # AI service unit tests + bot webhook tests
 ├── .env.example
 ├── .gitignore
 └── package.json
@@ -144,3 +154,77 @@ The middleware reads the `Authorization: Bearer <token>` header, verifies the JW
 | `npm run dev`        | Start server with auto-reload      |
 | `npm test`           | Run all tests (Jest)               |
 | `npm run sanity-check` | Run schema/export sanity checks  |
+
+---
+
+## Telegram Bot & AI Chat (Step 1.4)
+
+### Telegram Bot
+
+The bot is built with [Telegraf](https://telegraf.js.org/) and runs in **webhook mode** in production.
+
+Set `TELEGRAM_BOT_TOKEN` and `WEBHOOK_URL` in `.env`, then the server will automatically register the webhook on startup.
+
+**Supported commands:**
+
+| Command    | Description                             |
+|------------|-----------------------------------------|
+| `/start`   | Greet the user and explain the bot      |
+| `/help`    | List all available commands             |
+| `/newchat` | Instructions for starting a chat session via REST API |
+| `/endchat` | Instructions for closing a chat session via REST API  |
+
+Telegram delivers updates to `POST /bot/webhook`.
+
+### AI Chat API
+
+All chat routes require a valid `Authorization: Bearer <JWT>` header.
+
+| Method  | Path                            | Description                              |
+|---------|---------------------------------|------------------------------------------|
+| `POST`  | `/chat/sessions`                | Create a new chat session                |
+| `GET`   | `/chat/sessions`                | List the user's chat sessions            |
+| `GET`   | `/chat/sessions/:id`            | Get a session with its full message history |
+| `POST`  | `/chat/sessions/:id/messages`   | Send a message and receive an AI reply   |
+| `PATCH` | `/chat/sessions/:id/close`      | Close (end) a chat session               |
+
+#### POST /chat/sessions
+
+**Request body (all fields optional):**
+
+```json
+{
+  "isLegacyMode": false,
+  "heirTelegramId": null
+}
+```
+
+**Success response (201):**
+
+```json
+{ "session": { "_id": "...", "status": "open", "messages": [], ... } }
+```
+
+#### POST /chat/sessions/:id/messages
+
+**Request body:**
+
+```json
+{ "content": "Salom! Mening bolaligimdagi xotiralarim haqida gaplashamiz." }
+```
+
+**Success response (200):**
+
+```json
+{
+  "userMessage":      { "role": "user",      "content": "...", "sentAt": "..." },
+  "assistantMessage": { "role": "assistant",  "content": "...", "sentAt": "..." }
+}
+```
+
+#### AI Provider
+
+When `OPENAI_API_KEY` is set the service calls the OpenAI Chat Completions API
+(`gpt-4o-mini`).  Otherwise a built-in rule-based mock is used — no API key
+required for development and testing.
+
