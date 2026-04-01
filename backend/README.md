@@ -19,11 +19,13 @@ GET /health  →  200 OK  { "ok": true }
 
 ## Environment Variables
 
-| Variable      | Description                        | Default                              |
-|---------------|------------------------------------|--------------------------------------|
-| `PORT`        | Port the server listens on         | `3000`                               |
-| `MONGODB_URI` | MongoDB connection string          | `mongodb://localhost:27017/lifebotai`|
-| `NODE_ENV`    | Runtime environment                | `development`                        |
+| Variable        | Description                        | Default                              |
+|-----------------|------------------------------------|--------------------------------------|
+| `PORT`          | Port the server listens on         | `3000`                               |
+| `MONGODB_URI`   | MongoDB connection string          | `mongodb://localhost:27017/lifebotai`|
+| `NODE_ENV`      | Runtime environment                | `development`                        |
+| `JWT_SECRET`    | Secret key for signing JWT tokens  | `changeme_jwt_secret_for_dev`        |
+| `JWT_EXPIRES_IN`| JWT token lifetime                 | `7d`                                 |
 
 ## Project Structure
 
@@ -34,6 +36,8 @@ backend/
 │   ├── config/
 │   │   ├── database.js    # MongoDB connection
 │   │   └── env.js         # Environment variable loader
+│   ├── middleware/
+│   │   └── auth.js        # Bearer JWT authentication middleware
 │   ├── models/
 │   │   ├── index.js       # Unified model exports
 │   │   ├── User.js        # User schema (telegramId unique index)
@@ -41,11 +45,15 @@ backend/
 │   │   ├── LegacyConfig.js# Legacy config schema (userId unique index)
 │   │   ├── Subscription.js# Subscription schema (userId+status, userId+createdAt indexes)
 │   │   └── AiChat.js      # AI chat schema (userId+heirTelegramId, userId+createdAt indexes)
+│   ├── routes/
+│   │   └── auth.js        # POST /auth/telegram, GET /auth/me
 │   └── utils/
+│       ├── jwt.js         # JWT sign / verify helpers
 │       └── logger.js      # Simple console logger
 ├── tests/
 │   ├── setup.test.js      # Health route test
-│   └── models.test.js     # Mongoose schema / validation tests
+│   ├── models.test.js     # Mongoose schema / validation tests
+│   └── auth.test.js       # JWT utilities, auth routes, middleware tests
 ├── .env.example
 ├── .gitignore
 └── package.json
@@ -67,10 +75,72 @@ const { User, Memory, LegacyConfig, Subscription, AiChat } = require('./src/mode
 | `Subscription` | `userId+status`, `userId+createdAt`, `stripeSubscriptionId` |
 | `AiChat`       | `userId+heirTelegramId`, `userId+createdAt`          |
 
+## Authentication (Step 1.3)
+
+### Endpoints
+
+| Method | Path             | Auth required | Description                                         |
+|--------|------------------|---------------|-----------------------------------------------------|
+| `POST` | `/auth/telegram` | No            | Register or login via Telegram; returns a JWT token |
+| `GET`  | `/auth/me`       | Yes           | Return the current authenticated user's profile     |
+
+#### POST /auth/telegram
+
+**Request body:**
+
+```json
+{
+  "telegramId": "123456789",
+  "firstName": "Alibek",
+  "username": "alibekdev",
+  "lastName": "Yusupov",
+  "language": "uz"
+}
+```
+
+`telegramId` and `firstName` are required. All other fields are optional.
+
+**Success response (200):**
+
+```json
+{
+  "token": "<JWT>",
+  "user": { "_id": "...", "telegramId": "123456789", ... }
+}
+```
+
+#### GET /auth/me
+
+Requires `Authorization: Bearer <token>` header.
+
+**Success response (200):**
+
+```json
+{
+  "user": { "_id": "...", "telegramId": "123456789", ... }
+}
+```
+
+### JWT Middleware
+
+Import `src/middleware/auth.js` to protect any route:
+
+```js
+const authenticate = require('./middleware/auth');
+
+router.get('/protected-resource', authenticate, (req, res) => {
+  // req.user is the authenticated User document
+  res.json({ user: req.user });
+});
+```
+
+The middleware reads the `Authorization: Bearer <token>` header, verifies the JWT, and attaches the active `User` document to `req.user`. Returns `401` if the token is absent, invalid, expired, or belongs to an inactive user.
+
 ## Scripts
 
-| Command         | Description                     |
-|-----------------|---------------------------------|
-| `npm start`     | Start server (production)       |
-| `npm run dev`   | Start server with auto-reload   |
-| `npm test`      | Run tests                       |
+| Command              | Description                        |
+|----------------------|------------------------------------|
+| `npm start`          | Start server (production)          |
+| `npm run dev`        | Start server with auto-reload      |
+| `npm test`           | Run all tests (Jest)               |
+| `npm run sanity-check` | Run schema/export sanity checks  |

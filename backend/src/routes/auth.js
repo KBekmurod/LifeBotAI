@@ -1,10 +1,11 @@
 'use strict';
 
-const express   = require('express');
-const rateLimit = require('express-rate-limit');
-const { User }  = require('../models');
+const express      = require('express');
+const rateLimit    = require('express-rate-limit');
+const { User }     = require('../models');
 const { signToken } = require('../utils/jwt');
-const logger = require('../utils/logger');
+const authenticate = require('../middleware/auth');
+const logger       = require('../utils/logger');
 
 const router = express.Router();
 
@@ -13,6 +14,15 @@ const router = express.Router();
 const telegramAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+// Allow at most 60 profile-fetch requests per IP per minute.
+const meRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
@@ -54,6 +64,18 @@ router.post('/telegram', telegramAuthLimiter, async (req, res) => {
     logger.error('POST /auth/telegram error:', err.message);
     return res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+/**
+ * GET /auth/me
+ *
+ * Returns the profile of the currently authenticated user.
+ * Requires a valid Bearer JWT token in the Authorization header.
+ *
+ * Response: { user: object }
+ */
+router.get('/me', meRateLimiter, authenticate, (req, res) => {
+  return res.status(200).json({ user: req.user });
 });
 
 module.exports = router;

@@ -209,3 +209,50 @@ describe('authenticate middleware', () => {
     expect(res.body).toEqual({ ok: true });
   });
 });
+
+// ─── GET /auth/me ─────────────────────────────────────────────────────────────
+
+describe('GET /auth/me', () => {
+  const fakeUserId = new mongoose.Types.ObjectId();
+  const fakeUser   = { _id: fakeUserId, telegramId: '111', firstName: 'Test', isActive: true };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns 401 when no Authorization header is provided', async () => {
+    const res = await request(app).get('/auth/me');
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns 401 for an invalid token', async () => {
+    const res = await request(app)
+      .get('/auth/me')
+      .set('Authorization', 'Bearer bad.token.here');
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns 200 with user for a valid token and active user', async () => {
+    User.findById.mockResolvedValue(fakeUser);
+    const token = signToken(fakeUserId);
+
+    const res = await request(app)
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toHaveProperty('user');
+    expect(res.body.user.telegramId).toBe('111');
+  });
+
+  it('returns 401 when user is inactive', async () => {
+    User.findById.mockResolvedValue({ ...fakeUser, isActive: false });
+    const token = signToken(fakeUserId);
+
+    const res = await request(app)
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.statusCode).toBe(401);
+  });
+});
