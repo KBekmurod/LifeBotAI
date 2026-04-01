@@ -18,6 +18,9 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true });
 });
 
+// Auth routes
+app.use('/auth', require('./routes/auth'));
+
 // 404 handler
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not Found' });
