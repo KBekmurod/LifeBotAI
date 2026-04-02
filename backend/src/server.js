@@ -24,6 +24,9 @@ app.use('/auth', require('./routes/auth'));
 // Chat/AI routes (Step 1.4)
 app.use('/chat', require('./routes/chat'));
 
+// Memory routes (Step 1.5)
+app.use('/memories', require('./routes/memories'));
+
 // Telegram bot webhook (Step 1.4)
 app.use('/bot', require('./routes/bot'));
 

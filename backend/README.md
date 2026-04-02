@@ -50,6 +50,7 @@ backend/
 │   ├── routes/
 │   │   ├── auth.js        # POST /auth/telegram, GET /auth/me
 │   │   ├── chat.js        # Chat session CRUD + AI messaging
+│   │   ├── memories.js    # Memory CRUD (/memories)
 │   │   └── bot.js         # POST /bot/webhook (Telegram updates)
 │   ├── services/
 │   │   └── aiService.js   # AI response generation (mock + OpenAI)
@@ -63,7 +64,8 @@ backend/
 │   ├── models.test.js     # Mongoose schema / validation tests
 │   ├── auth.test.js       # JWT utilities, auth routes, middleware tests
 │   ├── chat.test.js       # Chat session routes + AI messaging tests
-│   └── bot.test.js        # AI service unit tests + bot webhook tests
+│   ├── memories.test.js   # Memory CRUD route tests
+│   └── bot.test.js        # AI service unit tests + bot webhook + helper tests
 ├── .env.example
 ├── .gitignore
 └── package.json
@@ -222,9 +224,76 @@ All chat routes require a valid `Authorization: Bearer <JWT>` header.
 }
 ```
 
-#### AI Provider
+---
 
-When `OPENAI_API_KEY` is set the service calls the OpenAI Chat Completions API
-(`gpt-4o-mini`).  Otherwise a built-in rule-based mock is used — no API key
-required for development and testing.
+## Memory API (Step 1.5)
+
+All memory routes require a valid `Authorization: Bearer <JWT>` header.
+
+| Method   | Path              | Description                                     |
+|----------|-------------------|-------------------------------------------------|
+| `POST`   | `/memories`       | Save a new memory entry                         |
+| `GET`    | `/memories`       | List the user's memories (paginated)            |
+| `GET`    | `/memories/:id`   | Get a specific memory                           |
+| `DELETE` | `/memories/:id`   | Soft-delete (archive) a memory                  |
+
+### POST /memories
+
+**Request body:**
+
+```json
+{
+  "type": "text",
+  "content": "Bolaligimdagi eng yaxshi xotiram...",
+  "tags": ["bolalilik", "oila"],
+  "memorizedAt": "2000-06-15T00:00:00.000Z"
+}
+```
+
+`type` is required (one of `voice`, `text`, `photo`, `video`, `document`).
+`content` is required when `type` is `text`. All other fields are optional.
+
+**Success response (201):**
+
+```json
+{ "memory": { "_id": "...", "type": "text", "content": "...", "tags": [], ... } }
+```
+
+### GET /memories
+
+**Query params:**
+
+| Param   | Type   | Description                              |
+|---------|--------|------------------------------------------|
+| `limit` | number | Max results (default 20, max 100)        |
+| `skip`  | number | Offset for pagination (default 0)        |
+| `type`  | string | Filter by type (voice/text/photo/etc.)   |
+| `tags`  | string | Comma-separated tags to filter by        |
+
+**Success response (200):**
+
+```json
+{ "memories": [...], "total": 42 }
+```
+
+### Telegram Bot — Inline AI Chat (Step 1.5)
+
+The bot now handles messages **inline** — no REST API calls needed from the user.
+
+When a user sends a plain text message:
+1. The bot auto-registers the user (or finds their existing account).
+2. The bot finds or creates an active chat session.
+3. The AI service generates a contextual reply.
+4. The bot replies with the AI-generated response.
+
+**Updated commands:**
+
+| Command    | Description                                       |
+|------------|---------------------------------------------------|
+| `/start`   | Greet the user, auto-register them                |
+| `/help`    | List all available commands                       |
+| `/newchat` | Close any open session and start a fresh one      |
+| `/endchat` | Close the current open session                    |
+| *(text)*   | Send any message to get an inline AI reply        |
+
 
