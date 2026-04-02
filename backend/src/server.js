@@ -2,7 +2,7 @@
 
 const express = require('express');
 const cors = require('cors');
-const { PORT } = require('./config/env');
+const { PORT, WEBHOOK_URL } = require('./config/env');
 const connectDB = require('./config/database');
 const logger = require('./utils/logger');
 
@@ -18,8 +18,14 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true });
 });
 
-// Auth routes
+// Auth routes (Step 1.3)
 app.use('/auth', require('./routes/auth'));
+
+// Chat/AI routes (Step 1.4)
+app.use('/chat', require('./routes/chat'));
+
+// Telegram bot webhook (Step 1.4)
+app.use('/bot', require('./routes/bot'));
 
 // 404 handler
 app.use((_req, res) => {
@@ -32,6 +38,14 @@ const start = async () => {
   app.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
   });
+
+  // Register Telegram webhook when a URL is configured
+  if (WEBHOOK_URL) {
+    const { setupWebhook } = require('./bot');
+    await setupWebhook(WEBHOOK_URL).catch((err) =>
+      logger.warn('Failed to register Telegram webhook:', err.message)
+    );
+  }
 };
 
 if (require.main === module) {
