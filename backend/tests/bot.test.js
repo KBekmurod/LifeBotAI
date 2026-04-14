@@ -2,6 +2,7 @@
 
 /**
  * Tests for Step 1.4 — AI Service and Bot webhook
+ * Tests for Step 1.5 — Bot inline AI chat helpers
  */
 
 // ─── AI Service tests ─────────────────────────────────────────────────────────
@@ -90,5 +91,110 @@ describe('POST /bot/webhook', () => {
   it('returns 404 for an unknown bot sub-path', async () => {
     const res = await request(app).get('/bot/unknown');
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// ─── Bot helper function tests ────────────────────────────────────────────────
+
+describe('bot helpers: findOrCreateUser', () => {
+  const mongoose = require('mongoose');
+
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  it('calls User.findOneAndUpdate with correct telegramId and fields', async () => {
+    const fakeUser = { _id: new mongoose.Types.ObjectId(), telegramId: '12345', firstName: 'Test' };
+    const mockFindOneAndUpdate = jest.fn().mockResolvedValue(fakeUser);
+
+    jest.doMock('../src/models', () => ({
+      User:   { findOneAndUpdate: mockFindOneAndUpdate },
+      AiChat: { findOne: jest.fn(), create: jest.fn() },
+      Memory: {},
+    }));
+
+    const { findOrCreateUser } = require('../src/bot');
+    const ctx = {
+      from: { id: 12345, first_name: 'Test', last_name: 'User', username: 'testuser', language_code: 'uz' },
+    };
+
+    const user = await findOrCreateUser(ctx);
+    expect(user).toEqual(fakeUser);
+    expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+      { telegramId: '12345' },
+      expect.objectContaining({ $set: expect.objectContaining({ firstName: 'Test' }) }),
+      { upsert: true, new: true, runValidators: true }
+    );
+  });
+
+  it('handles missing optional fields gracefully', async () => {
+    const fakeUser = { _id: new mongoose.Types.ObjectId(), telegramId: '99999', firstName: 'Bot' };
+    const mockFindOneAndUpdate = jest.fn().mockResolvedValue(fakeUser);
+
+    jest.doMock('../src/models', () => ({
+      User:   { findOneAndUpdate: mockFindOneAndUpdate },
+      AiChat: { findOne: jest.fn(), create: jest.fn() },
+      Memory: {},
+    }));
+
+    const { findOrCreateUser } = require('../src/bot');
+    const ctx = { from: { id: 99999, first_name: 'Bot' } };
+
+    const user = await findOrCreateUser(ctx);
+    expect(user).toEqual(fakeUser);
+    expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+      { telegramId: '99999' },
+      { $set: { firstName: 'Bot' } },
+      { upsert: true, new: true, runValidators: true }
+    );
+  });
+});
+
+describe('bot helpers: findOrCreateSession', () => {
+  const mongoose = require('mongoose');
+
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  it('returns an existing open session if one exists', async () => {
+    const userId  = new mongoose.Types.ObjectId();
+    const session = { _id: new mongoose.Types.ObjectId(), userId, status: 'open', messages: [] };
+    const mockSort = jest.fn().mockResolvedValue(session);
+    const mockFindOne = jest.fn().mockReturnValue({ sort: mockSort });
+    const mockCreate  = jest.fn();
+
+    jest.doMock('../src/models', () => ({
+      User:   { findOneAndUpdate: jest.fn() },
+      AiChat: { findOne: mockFindOne, create: mockCreate },
+      Memory: {},
+    }));
+
+    const { findOrCreateSession } = require('../src/bot');
+    const result = await findOrCreateSession(userId);
+
+    expect(result).toEqual(session);
+    expect(mockFindOne).toHaveBeenCalledWith({ userId, status: 'open' });
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('creates a new session when none is open', async () => {
+    const userId  = new mongoose.Types.ObjectId();
+    const newSession = { _id: new mongoose.Types.ObjectId(), userId, status: 'open', messages: [] };
+    const mockSort   = jest.fn().mockResolvedValue(null);
+    const mockFindOne = jest.fn().mockReturnValue({ sort: mockSort });
+    const mockCreate  = jest.fn().mockResolvedValue(newSession);
+
+    jest.doMock('../src/models', () => ({
+      User:   { findOneAndUpdate: jest.fn() },
+      AiChat: { findOne: mockFindOne, create: mockCreate },
+      Memory: {},
+    }));
+
+    const { findOrCreateSession } = require('../src/bot');
+    const result = await findOrCreateSession(userId);
+
+    expect(result).toEqual(newSession);
+    expect(mockCreate).toHaveBeenCalledWith({ userId, isLegacyMode: false });
   });
 });
